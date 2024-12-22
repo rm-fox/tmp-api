@@ -200,17 +200,19 @@ async function getBestQuote(connection, inputMint, outputMint, amount) {
 
     const data = await response.json();
 
-    // Adjust output amounts back down using output decimals
-    if (data && data.data && Array.isArray(data.data)) {
-      data.data = data.data.map(quote => {
-        return {
-          ...quote,
-          outAmount: (BigInt(quote.outAmount) / BigInt(10 ** outputDecimals)).toString(),
-        };
-      });
-    }
+    const outAmount =  (BigInt(data.outAmount) / BigInt(10 ** outputDecimals)).toString()
 
-    return data;
+    // Adjust output amounts back down using output decimals
+    // if (data && data.data && Array.isArray(data.data)) {
+    //   data.data = data.data.map(quote => {
+    //     return {
+    //       ...quote,
+    //       outAmount: (BigInt(quote.outAmount) / BigInt(10 ** outputDecimals)).toString(),
+    //     };
+    //   });
+    // }
+
+    return outAmount;
   } catch (error) {
     console.error("Error fetching quote:", error.message);
     throw error;
