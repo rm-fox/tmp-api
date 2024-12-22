@@ -151,6 +151,77 @@ async function transferSOL(privateKeyBase58, recipientPublicKey, amountSol) {
   return { success: true, transactionId: signature };
 }
 
+async function getTokenDecimals(connection, mintAddress) {
+  try {
+      const mintAccountInfo = await connection.getParsedAccountInfo(
+          new PublicKey(mintAddress)
+      );
+
+      if (
+          mintAccountInfo &&
+          mintAccountInfo.value &&
+          mintAccountInfo.value.data &&
+          mintAccountInfo.value.data.parsed
+      ) {
+          return mintAccountInfo.value.data.parsed.info.decimals;
+      }
+  } catch (error) {
+      console.error("Error fetching token decimals:", error);
+      throw new Error("Failed to fetch token decimals");
+  }
+  return 0; // Default fallback
+}
+
+// Function to get the best quote from Jupiter API
+async function getBestQuote(connection, inputMint, outputMint, amount) {
+  try {
+    // Get decimals for the input token
+    const decimals = await getTokenDecimals(connection, inputMint);
+
+    // Adjust the amount based on the decimals
+    const adjustedAmount = BigInt(amount) * BigInt(10 ** decimals);
+
+    const url = `https://quote-api.jup.ag/v6/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${adjustedAmount.toString()}`;
+
+    const headers = {
+      'Accept': 'application/json',
+    };
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: headers,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Error fetching quote:", error.message);
+    throw error;
+  }
+}
+
+// API endpoint to get Jupiter best quote
+app.get('/get-quote', async (req, res) => {
+  const { inputMint, outputMint, amount } = req.query;
+
+  if (!inputMint || !outputMint || !amount) {
+    return res.status(400).json({ error: "Please provide inputMint, outputMint, and amount parameters." });
+  }
+
+  try {
+    const connection = new Connection('https://api.mainnet-beta.solana.com'); // Use the appropriate Solana cluster endpoint
+    const quote = await getBestQuote(connection, inputMint, outputMint, amount);
+    res.json(quote);
+  } catch (error) {
+    console.error("Error fetching Jupiter quote:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/transfer-sol', async (req, res) => {
   const { privateKeyBase58, recipientPublicKey, amountSol } = req.query;
 
@@ -217,3 +288,6 @@ app.get('/get-wallet-balance', async (req, res) => {
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
+
+
+
