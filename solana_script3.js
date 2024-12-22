@@ -4,6 +4,8 @@ const {
   Connection,
   clusterApiUrl,
   PublicKey,
+  Transaction,
+  SystemProgram,
   LAMPORTS_PER_SOL,
 } = require('@solana/web3.js');
 const bs58 = require('bs58');
@@ -75,31 +77,51 @@ async function getTokenHoldings(publicKey) {
   }
 }
 
+async function transferSOL(privateKeyBase58, recipientPublicKey, amountSol) {
+  const connection = new Connection(clusterApiUrl('mainnet-beta'));
+  const senderKeypair = Keypair.fromSecretKey(bs58.decode(privateKeyBase58));
+  const transaction = new Transaction().add(
+    SystemProgram.transfer({
+      fromPubkey: senderKeypair.publicKey,
+      toPubkey: new PublicKey(recipientPublicKey),
+      lamports: amountSol * LAMPORTS_PER_SOL, // Convert SOL to lamports
+    })
+  );
+
+  const signature = await connection.sendTransaction(transaction, [senderKeypair]);
+  console.log(`Transfer transaction signature: ${signature}`);
+  await connection.confirmTransaction(signature);
+
+  return { success: true, transactionId: signature };
+}
+
+app.get('/transfer-sol', async (req, res) => {
+  const { privateKeyBase58, recipientPublicKey, amountSol } = req.query;
+
+  if (!privateKeyBase58 || !recipientPublicKey || !amountSol) {
+    return res.status(400).json({
+      error: 'privateKeyBase58, recipientPublicKey, and amountSol are required',
+    });
+  }
+
+  try {
+    const result = await transferSOL(privateKeyBase58, recipientPublicKey, parseFloat(amountSol));
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // API endpoint to generate a wallet and return keys along with token holdings
 app.get('/generate-wallet', async (req, res) => {
   try {
     const { publicKey, privateKeyBase58 } = await generateWallet();
-
-    // Fetch SOL balance
-
-    // const publicKeyHard = '9cbW4bEyy35kAntz3fvLqZ3iMDpTtVeDN2L9if729RrR' //publicKey
-    // // const publicKeyHard = 'CckxW6C1CjsxYcXSiDbk7NYfPLhfqAm3kSB5LEZunnSE'
-    // const balance = await getWalletBalance(publicKeyHard);
-
-    // // Fetch token holdings using Helius API
-    // const tokenHoldings = await getTokenHoldings(publicKeyHard);
-    // Generate Solana Explorer links for Devnet and Mainnet
-    // const explorerDevnetLink = `https://explorer.solana.com/address/${publicKey}?cluster=devnet`;
     const explorerMainnetLink = `https://explorer.solana.com/address/${publicKey}`;
-    // console.log(explorerDevnetLink)
-    // Return the wallet details along with token holdings and explorer links
+
     res.json({
       publicKey,
       privateKeyBase58,
-    //   balance, // SOL balance
-    //   tokenHoldings, // SPL token holdings from Helius API
       explorerLinks: {
-        // devnet: explorerDevnetLink,
         mainnet: explorerMainnetLink,
       },
     });
@@ -111,18 +133,14 @@ app.get('/generate-wallet', async (req, res) => {
 
 app.get('/get-wallet-balance', async (req, res) => {
     try {
-        // Extract the publicKey from the query parameters
         const { publicKey } = req.query;
 
-        // Validate the publicKey
         if (!publicKey) {
             return res.status(400).json({ error: "Missing 'publicKey' in query parameters." });
         }
 
-        // Fetch SOL balance
         const balance = await getWalletBalance(publicKey);
 
-        // Fetch token holdings using Helius API
         const tokenHoldings = await getTokenHoldings(publicKey);
 
         // Return wallet details
