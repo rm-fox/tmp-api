@@ -151,42 +151,36 @@ async function transferSOL(privateKeyBase58, recipientPublicKey, amountSol) {
   return { success: true, transactionId: signature };
 }
 
-async function getTokenDecimals(connection, mintAddress) {
-  try {
-      const mintAccountInfo = await connection.getParsedAccountInfo(
-          new PublicKey(mintAddress)
-      );
+// async function getTokenDecimals(connection, mintAddress) {
+//   try {
+//       const mintAccountInfo = await connection.getParsedAccountInfo(
+//           new PublicKey(mintAddress)
+//       );
 
-      if (
-          mintAccountInfo &&
-          mintAccountInfo.value &&
-          mintAccountInfo.value.data &&
-          mintAccountInfo.value.data.parsed
-      ) {
-          return mintAccountInfo.value.data.parsed.info.decimals;
-      }
-  } catch (error) {
-      console.error("Error fetching token decimals:", error);
-      throw new Error("Failed to fetch token decimals");
-  }
-  return 0; // Default fallback
-}
+//       if (
+//           mintAccountInfo &&
+//           mintAccountInfo.value &&
+//           mintAccountInfo.value.data &&
+//           mintAccountInfo.value.data.parsed
+//       ) {
+//           return mintAccountInfo.value.data.parsed.info.decimals;
+//       }
+//   } catch (error) {
+//       console.error("Error fetching token decimals:", error);
+//       throw new Error("Failed to fetch token decimals");
+//   }
+//   return 0; // Default fallback
+// }
 
 // Function to get the best quote from Jupiter API
-async function getBestQuote(connection, inputMint, outputMint, amount) {
+async function getBestQuote(inputMint, outputMint, amount) {
+  const url = `https://quote-api.jup.ag/v6/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}`;
+
+  const headers = {
+    'Accept': 'application/json',
+  };
+
   try {
-    // Get decimals for the input token
-    const decimals = await getTokenDecimals(connection, inputMint);
-
-    // Adjust the amount based on the decimals
-    const adjustedAmount = BigInt(amount) * BigInt(10 ** decimals);
-
-    const url = `https://quote-api.jup.ag/v6/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${adjustedAmount.toString()}`;
-
-    const headers = {
-      'Accept': 'application/json',
-    };
-
     const response = await fetch(url, {
       method: 'GET',
       headers: headers,
@@ -203,7 +197,6 @@ async function getBestQuote(connection, inputMint, outputMint, amount) {
     throw error;
   }
 }
-
 // API endpoint to get Jupiter best quote
 app.get('/get-quote', async (req, res) => {
   const { inputMint, outputMint, amount } = req.query;
@@ -213,14 +206,14 @@ app.get('/get-quote', async (req, res) => {
   }
 
   try {
-    const connection = new Connection('https://api.mainnet-beta.solana.com'); // Use the appropriate Solana cluster endpoint
-    const quote = await getBestQuote(connection, inputMint, outputMint, amount);
+    const quote = await getBestQuote(inputMint, outputMint, amount);
     res.json(quote);
   } catch (error) {
     console.error("Error fetching Jupiter quote:", error);
     res.status(500).json({ error: error.message });
   }
 });
+
 
 app.get('/transfer-sol', async (req, res) => {
   const { privateKeyBase58, recipientPublicKey, amountSol } = req.query;
