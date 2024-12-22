@@ -77,6 +77,62 @@ async function getTokenHoldings(publicKey) {
   }
 }
 
+// Function to fetch metadata for all token holdings
+async function getTokenHoldingsWithMetadata(publicKey) {
+  try {
+    const tokenHoldings = await getTokenHoldings(publicKey);
+
+    const metadataPromises = tokenHoldings.token_accounts.map(async (token) => {
+      const mint = token.mint;
+      const metadata = await getAssetMetadata(mint);
+
+      return {
+        mint,
+        amount: token.amount,
+        metadata,
+      };
+    });
+
+    const tokenHoldingsWithMetadata = await Promise.all(metadataPromises);
+
+    return tokenHoldingsWithMetadata;
+  } catch (error) {
+    console.error("Error fetching token holdings with metadata:", error);
+    throw error;
+  }
+}
+
+// Function to fetch asset metadata using Helium API
+async function getAssetMetadata(assetId) {
+  try {
+    const response = await fetch(HELIUS_API_URL, {
+      method: 'POST',
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: "helius-asset-metadata",
+        method: "getAsset",
+        params: {
+          id: assetId,
+        },
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!data.result) {
+      throw new Error(`No metadata found for asset ID: ${assetId}`);
+    }
+
+    return data.result;
+  } catch (error) {
+    console.error("Error fetching asset metadata:", error);
+    throw error;
+  }
+}
+
 async function transferSOL(privateKeyBase58, recipientPublicKey, amountSol) {
   const connection = new Connection(clusterApiUrl('mainnet-beta'));
   const senderKeypair = Keypair.fromSecretKey(bs58.decode(privateKeyBase58));
@@ -141,7 +197,8 @@ app.get('/get-wallet-balance', async (req, res) => {
 
         const balance = await getWalletBalance(publicKey);
 
-        const tokenHoldings = await getTokenHoldings(publicKey);
+        // const tokenHoldings = await getTokenHoldings(publicKey);
+        const tokenHoldings = await getTokenHoldingsWithMetadata(publicKey);
 
         // Return wallet details
         res.json({
